@@ -1,0 +1,20 @@
+[package]
+name = "jev-studio"
+version = "0.1.0"
+edition = "2024"
+description = "A native visual canvas for agent workflows"
+
+[dependencies]
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
+wgpu = { version = "25", default-features = false, features = ["metal", "dx12", "vulkan"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+egui_material_icons = "=0.4.0"
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native", "windows-native"] }
+ureq = { version = "=3.1.4", default-features = false, features = ["rustls", "json"] }
+zeroize = "1"
+
+[profile.release]
+opt-level = 2
+lto = "thin"
