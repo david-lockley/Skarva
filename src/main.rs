@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 mod appearance;
 mod attachments;
 mod brand;
@@ -35,6 +40,12 @@ const TEXT: Color32 = Color32::from_rgb(237, 239, 238);
 const MUTED: Color32 = Color32::from_rgb(144, 150, 152);
 const ACCENT: Color32 = Color32::from_rgb(56, 108, 125);
 const ACCENT_DETAIL: Color32 = Color32::from_rgb(128, 182, 196);
+
+fn primary_button(label: impl Into<String>) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(label.into()).color(BG).strong())
+        .fill(TEXT)
+        .corner_radius(8)
+}
 
 fn kind_color(kind: NodeKind) -> Color32 {
     match kind {
@@ -89,20 +100,11 @@ fn category_icon(category: BlockCategory) -> &'static str {
     }
 }
 
+#[derive(Default)]
 struct BlockPickerState {
     expanded: [bool; 5],
     search: String,
     focus_search: bool,
-}
-
-impl Default for BlockPickerState {
-    fn default() -> Self {
-        Self {
-            expanded: [false; 5],
-            search: String::new(),
-            focus_search: false,
-        }
-    }
 }
 
 impl BlockPickerState {
@@ -127,13 +129,13 @@ fn category_index(category: BlockCategory) -> usize {
 fn picker_row(
     ui: &mut egui::Ui,
     width: f32,
-    icon: &str,
+    icon: (&str, Color32),
     label: &str,
     indent: f32,
     active: bool,
     trailing: Option<&str>,
-    color: Color32,
 ) -> bool {
+    let (icon, color) = icon;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 34.0), Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     if active || response.hovered() {
@@ -239,12 +241,11 @@ fn block_picker(
                     if picker_row(
                         ui,
                         width,
-                        category_icon(category),
+                        (category_icon(category), MUTED),
                         category.label(),
                         0.0,
                         expanded,
                         Some(chevron),
-                        MUTED,
                     ) {
                         state.expanded[index] = !expanded;
                     }
@@ -262,12 +263,11 @@ fn block_picker(
                         if picker_row(
                             ui,
                             width,
-                            kind_icon(kind),
+                            (kind_icon(kind), kind_color(kind)),
                             kind.label(),
                             if query.is_empty() { 16.0 } else { 0.0 },
                             false,
                             None,
-                            kind_color(kind),
                         ) {
                             chosen = Some(kind);
                         }
@@ -481,8 +481,11 @@ struct SkarvaApp {
     menu_picker: BlockPickerState,
     show_new_project: bool,
     new_project_name: String,
+    new_project_template: bool,
+    focus_project_name: bool,
     show_new_canvas: bool,
     new_canvas_name: String,
+    focus_canvas_name: bool,
     deleting_project: Option<u64>,
     renaming_project: Option<(u64, String)>,
     project_search: String,
@@ -519,7 +522,11 @@ struct SkarvaApp {
 
 impl SkarvaApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        egui_material_icons::initialize(&cc.egui_ctx);
+        Self::with_storage(&cc.egui_ctx, Storage::new())
+    }
+
+    fn with_storage(ctx: &egui::Context, storage: Storage) -> Self {
+        egui_material_icons::initialize(ctx);
         let mut visuals = egui::Visuals::dark();
         visuals.panel_fill = PANEL;
         visuals.window_fill = PANEL;
@@ -533,15 +540,14 @@ impl SkarvaApp {
         visuals.widgets.active.fg_stroke.color = TEXT;
         visuals.selection.bg_fill = Color32::from_rgb(47, 75, 89);
         visuals.selection.stroke.color = ACCENT_DETAIL;
-        cc.egui_ctx.set_visuals(visuals);
-        cc.egui_ctx.style_mut(|style| {
+        ctx.set_visuals(visuals);
+        ctx.style_mut(|style| {
             style.spacing.item_spacing = Vec2::new(8.0, 8.0);
             style.spacing.button_padding = Vec2::new(11.0, 7.0);
         });
-        let storage = Storage::new();
         let projects = storage.list();
         Self {
-            logo_mark: appearance::load_mark(&cc.egui_ctx),
+            logo_mark: appearance::load_mark(ctx),
             storage,
             projects,
             project: None,
@@ -559,8 +565,11 @@ impl SkarvaApp {
             menu_picker: BlockPickerState::default(),
             show_new_project: false,
             new_project_name: String::new(),
+            new_project_template: false,
+            focus_project_name: true,
             show_new_canvas: false,
             new_canvas_name: String::new(),
+            focus_canvas_name: true,
             deleting_project: None,
             renaming_project: None,
             project_search: String::new(),
@@ -610,10 +619,12 @@ impl SkarvaApp {
     }
 
     fn save(&mut self) {
-        if let Some(project) = &self.project {
-            if let Err(error) = self.storage.save(project) {
-                self.message(format!("Could not save: {error}"));
-            }
+        if let Some(project) = &self.project
+            && let Err(error) = self.storage.save(project)
+        {
+            self.message(format!("Could not save: {error}"));
+            self.dirty_at = Some(Instant::now() + Duration::from_secs(5));
+            return;
         }
         self.dirty_at = None;
     }
@@ -648,25 +659,91 @@ impl SkarvaApp {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        let project = Project::new(id, name);
+        let project = if self.new_project_template {
+            Project::text_workflow(id, name)
+        } else {
+            Project::new(id, name)
+        };
         self.open_project(project);
         self.save();
         self.show_new_project = false;
         self.new_project_name.clear();
     }
 
+    fn import_project(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Skarva project", &["json"])
+            .pick_file()
+        else {
+            return;
+        };
+        let id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        match self.storage.import(&path, id) {
+            Ok(project) => {
+                self.open_project(project);
+                self.message("Project imported. Review its instructions and local file paths before running.");
+            }
+            Err(error) => self.message(format!("Could not import project: {error}")),
+        }
+    }
+
+    fn export_project(&mut self) {
+        let Some(project) = &self.project else { return };
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Skarva project", &["json"])
+            .set_file_name("workflow.json")
+            .save_file()
+        else {
+            return;
+        };
+        let result = serde_json::to_vec_pretty(project)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| std::fs::write(path, bytes).map_err(|e| e.to_string()));
+        match result {
+            Ok(()) => self.message(
+                "Project exported. Service keys and conversation history are not included.",
+            ),
+            Err(error) => self.message(format!("Could not export project: {error}")),
+        }
+    }
+
+    fn dialog_open(&self) -> bool {
+        self.show_integrations
+            || self.show_new_project
+            || self.show_new_canvas
+            || self.renaming_project.is_some()
+            || self.deleting_project.is_some()
+    }
+
     fn add_node(&mut self, kind: NodeKind, center: Option<Pos2>) -> Option<u64> {
-        let count = self.canvas().map(|c| c.nodes.len()).unwrap_or(0);
+        if self.run.running() {
+            return None;
+        }
         let pos = if let Some(center) = center {
             Vec2::new(
-                (center.x - 124.0) / self.zoom + self.pan.x,
-                (center.y - 40.0) / self.zoom + self.pan.y,
+                center.x / self.zoom + self.pan.x - 124.0,
+                center.y / self.zoom + self.pan.y - 40.0,
             )
         } else {
-            Vec2::new(
-                self.pan.x - 410.0 + (count % 3) as f32 * 285.0,
-                self.pan.y - 60.0 + (count / 3) as f32 * 170.0,
-            )
+            let anchor = self.canvas().and_then(|canvas| {
+                self.selected
+                    .and_then(|id| canvas.node(id))
+                    .or_else(|| canvas.nodes.last())
+            });
+            let mut position = anchor
+                .map(|node| Vec2::new(node.x + 340.0, node.y))
+                .unwrap_or(self.pan - Vec2::new(124.0, 40.0));
+            while self.canvas().is_some_and(|canvas| {
+                canvas.nodes.iter().any(|node| {
+                    (node.x - position.x).abs() < 280.0 && (node.y - position.y).abs() < 160.0
+                })
+            }) {
+                position.y += 180.0;
+            }
+            position
         };
         let project = self.project.as_mut()?;
         let id = project.allocate_id();
@@ -675,6 +752,9 @@ impl SkarvaApp {
             self.selected = Some(id);
             self.selected_nodes.clear();
             self.selected_nodes.insert(id);
+            if center.is_none() {
+                self.fit_canvas = true;
+            }
             self.changed();
             return Some(id);
         }
@@ -682,6 +762,9 @@ impl SkarvaApp {
     }
 
     fn delete_selected(&mut self) {
+        if self.run.running() {
+            return;
+        }
         if self.selected_nodes.is_empty() {
             return;
         }
@@ -697,6 +780,9 @@ impl SkarvaApp {
     }
 
     fn delete_selected_edge(&mut self) {
+        if self.run.running() {
+            return;
+        }
         let Some(id) = self.selected_edge.take() else {
             return;
         };
@@ -707,27 +793,24 @@ impl SkarvaApp {
     }
 
     fn duplicate_selected(&mut self) {
-        let Some(id) = self.selected else {
+        if self.run.running() {
             return;
-        };
-        let Some(mut copy) = self.canvas().and_then(|c| c.node(id)).cloned() else {
-            return;
-        };
+        }
         let Some(project) = self.project.as_mut() else {
             return;
         };
-        copy.id = project.allocate_id();
-        copy.x += 32.0;
-        copy.y += 32.0;
-        let new_id = copy.id;
-        project.canvases[self.canvas_index].nodes.push(copy);
-        self.selected = Some(new_id);
-        self.selected_nodes.clear();
-        self.selected_nodes.insert(new_id);
-        self.changed();
+        let copied = project.duplicate_nodes(self.canvas_index, &self.selected_nodes);
+        if !copied.is_empty() {
+            self.selected = copied.first().copied();
+            self.selected_nodes = copied.into_iter().collect();
+            self.changed();
+        }
     }
 
     fn connect_to(&mut self, to: u64) {
+        if self.run.running() {
+            return;
+        }
         let Some((from, output)) = self.connecting.take() else {
             return;
         };
@@ -803,7 +886,7 @@ impl SkarvaApp {
                         }
                         Ok(ActionResult::Draft(draft)) => {
                             self.run.draft = draft;
-                            self.run.log.push("AI model drafted a reply".into());
+                            self.run.log.push("AI model produced text".into());
                             if let Some(id) = self.run.active {
                                 self.run.completed_actions.insert(id);
                                 self.run.queue.push_front(id);
@@ -1011,7 +1094,7 @@ impl SkarvaApp {
                         let target = canvas.node(edge.to);
                         if matches!(node.kind, NodeKind::Decision | NodeKind::YesNo) {
                             format!(
-                                "{} → {}",
+                                "{} / {}",
                                 node.output_label(edge.output),
                                 target.map(|n| n.title.as_str()).unwrap_or("Unknown")
                             )
@@ -1144,7 +1227,7 @@ impl SkarvaApp {
                     let provider = self.llm_provider;
                     let model = self.llm_model.clone();
                     let instructions = if node.prompt.trim().is_empty() {
-                        "Write a concise helpful reply to the email. Do not invent facts."
+                        "Respond to the incoming request clearly and concisely. Do not invent facts."
                     } else {
                         node.prompt.as_str()
                     }
@@ -1177,8 +1260,10 @@ impl SkarvaApp {
                     && node.kind == NodeKind::GmailReply
                     && !self.run.completed_actions.contains(&id)
                 {
-                    if self.run.draft.trim().is_empty() && self.run.artifact.is_some() {
-                        let name = &self.run.artifact.as_ref().unwrap().title;
+                    if self.run.draft.trim().is_empty()
+                        && let Some(artifact) = &self.run.artifact
+                    {
+                        let name = &artifact.title;
                         self.run.draft = format!(
                             "I've attached {name} as requested. Let me know if you would like any changes."
                         );
@@ -1413,13 +1498,11 @@ impl SkarvaApp {
             self.message("Reset or finish the current run before starting another");
             return;
         }
-        if !self.connection_preferences_loaded {
-            self.start_after_connections = true;
-            self.load_connection_preferences();
-            self.message("Loading saved connections…");
+        let Some(canvas) = self.canvas() else { return };
+        if let Err(error) = canvas.validate() {
+            self.message(error);
             return;
         }
-        let Some(canvas) = self.canvas() else { return };
         let starts: Vec<_> = canvas
             .nodes
             .iter()
@@ -1456,6 +1539,18 @@ impl SkarvaApp {
             .iter()
             .filter(|n| reachable.contains(&n.id))
             .collect();
+        let needs_services = nodes.iter().any(|n| {
+            matches!(
+                n.kind,
+                NodeKind::GmailInbox
+                    | NodeKind::GmailReply
+                    | NodeKind::OpenAI
+                    | NodeKind::Word
+                    | NodeKind::Excel
+                    | NodeKind::PowerPoint
+                    | NodeKind::WebSearch
+            ) || canvas.edges.iter().filter(|e| e.from == n.id).count() > 1
+        });
         if let Some(node) = nodes.iter().find(|n| {
             matches!(
                 n.kind,
@@ -1470,6 +1565,27 @@ impl SkarvaApp {
         }
         if mode != RunMode::Email && nodes.iter().any(|n| n.kind == NodeKind::GmailReply) {
             self.message("Start with Email received to reply to an email");
+            return;
+        }
+        if let Some(node) = nodes.iter().find(|n| {
+            n.kind == NodeKind::YesNo
+                && (0..2).any(|output| {
+                    !canvas
+                        .edges
+                        .iter()
+                        .any(|e| e.from == n.id && e.output == output)
+                })
+        }) {
+            self.message(format!(
+                "Connect both Yes and No on '{}'. Use an End block for a path that should stop.",
+                node.title
+            ));
+            return;
+        }
+        if needs_services && !self.connection_preferences_loaded {
+            self.start_after_connections = true;
+            self.load_connection_preferences();
+            self.message("Loading saved connections…");
             return;
         }
         let missing = if mode == RunMode::Email && self.gmail_connected != Some(true) {
@@ -1505,6 +1621,11 @@ impl SkarvaApp {
             self.message(message);
             return;
         }
+        self.connecting = None;
+        self.connection_dragging = false;
+        self.connection_menu = None;
+        self.node_drag = None;
+        self.marquee = None;
         self.run.start(start, mode, input);
         if mode == RunMode::Email {
             self.run.queue.clear();
@@ -1519,10 +1640,15 @@ impl SkarvaApp {
             .exact_width(200.0)
             .resizable(false)
             .show(ctx, |ui| {
+                if self.dialog_open() {
+                    ui.disable();
+                }
                 ui.add_space(28.0);
                 ui.horizontal(|ui| {
                     ui.add_space(20.0);
-                    ui.add(egui::Image::new(&self.logo_mark).fit_to_exact_size(Vec2::new(32.0, 22.3)));
+                    ui.add(
+                        egui::Image::new(&self.logo_mark).fit_to_exact_size(Vec2::new(32.0, 22.3)),
+                    );
                     ui.label(RichText::new(brand::NAME).size(23.0).strong().color(TEXT));
                 });
                 ui.add_space(42.0);
@@ -1537,6 +1663,15 @@ impl SkarvaApp {
                 });
                 ui.with_layout(egui::Layout::bottom_up(Align::LEFT), |ui| {
                     ui.add_space(18.0);
+                    ui.label(
+                        RichText::new(format!("Version {} · Preview", env!("CARGO_PKG_VERSION")))
+                            .size(10.0)
+                            .color(MUTED),
+                    );
+                    ui.hyperlink_to(
+                        "Help & setup",
+                        "https://github.com/david-lockley/skarva/blob/main/docs/SETUP.md",
+                    );
                     if ui
                         .add_sized(
                             [180.0, 38.0],
@@ -1551,6 +1686,7 @@ impl SkarvaApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(BG).inner_margin(32.0))
             .show(ctx, |ui| {
+                if self.dialog_open() { ui.disable(); }
                 ui.add_space(14.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
@@ -1565,17 +1701,14 @@ impl SkarvaApp {
                         if ui
                             .add_sized(
                                 [135.0, 38.0],
-                                egui::Button::new(
-                                    RichText::new(format!("{}  New project", ICON_ADD))
-                                        .color(TEXT)
-                                        .strong(),
-                                )
-                                .fill(ACCENT)
-                                .corner_radius(8),
+                                primary_button(format!("{}  New project", ICON_ADD)),
                             )
                             .clicked()
                         {
                             self.show_new_project = true;
+                        }
+                        if ui.add_sized([90.0, 38.0], egui::Button::new("Import…").frame(false)).clicked() {
+                            self.import_project();
                         }
                     });
                 });
@@ -1619,6 +1752,15 @@ impl SkarvaApp {
                             })
                             .color(MUTED),
                         );
+                        if query.is_empty() {
+                            ui.add_space(12.0);
+                            if ui.add(primary_button("Create your first project")).clicked() {
+                                self.show_new_project = true;
+                            }
+                            ui.add_space(10.0);
+                            ui.label(RichText::new("Start with a blank canvas or a ready-to-connect text workflow.").size(12.0).color(MUTED));
+                            ui.label(RichText::new("Connect only the services your workflow needs.").size(12.0).color(MUTED));
+                        }
                     });
                 } else {
                     let columns = ((ui.available_width() / 285.0) as usize).clamp(1, 4);
@@ -1795,6 +1937,9 @@ impl SkarvaApp {
         egui::TopBottomPanel::top("top")
             .exact_height(66.0)
             .show(ctx, |ui| {
+                if self.dialog_open() {
+                    ui.disable();
+                }
                 ui.horizontal_centered(|ui| {
                     ui.add_space(14.0);
                     if ui
@@ -1824,20 +1969,27 @@ impl SkarvaApp {
                         }
                     }
                     ui.add_space(10.0);
-                    ui.add(egui::Image::new(&self.logo_mark).fit_to_exact_size(Vec2::new(26.0, 18.2)))
-                        .on_hover_text(brand::NAME);
-                    if let Some(project) = &self.project {
-                        if ui
+                    ui.add(
+                        egui::Image::new(&self.logo_mark).fit_to_exact_size(Vec2::new(26.0, 18.2)),
+                    )
+                    .on_hover_text(brand::NAME);
+                    if let Some(project) = &self.project
+                        && ui
                             .add(
                                 egui::Button::new(RichText::new(&project.name).size(15.0).strong())
                                     .frame(false),
                             )
                             .on_hover_text("Rename project")
                             .clicked()
-                        {
-                            self.renaming_project = Some((project.id, project.name.clone()));
-                        }
+                    {
+                        self.renaming_project = Some((project.id, project.name.clone()));
                     }
+                    ui.menu_button(ICON_MORE_HORIZ, |ui| {
+                        if ui.button("Export project…").clicked() {
+                            self.export_project();
+                            ui.close();
+                        }
+                    });
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                         ui.add_space(14.0);
                         let running = self.run.running();
@@ -1854,14 +2006,7 @@ impl SkarvaApp {
                             ("Play", ICON_PLAY_ARROW)
                         };
                         if ui
-                            .add_sized(
-                                [108.0, 38.0],
-                                egui::Button::new(
-                                    RichText::new(format!("{icon}  {label}")).color(TEXT).strong(),
-                                )
-                                .fill(ACCENT)
-                                .corner_radius(8),
-                            )
+                            .add_sized([108.0, 38.0], primary_button(format!("{icon}  {label}")))
                             .clicked()
                         {
                             if self.run.approval.is_some() || self.run.send_approval {
@@ -1872,26 +2017,25 @@ impl SkarvaApp {
                                 self.start_run();
                             }
                         }
-                        if running || self.run.finished {
-                            if ui
+                        if (running || self.run.finished)
+                            && ui
                                 .add_sized(
                                     [38.0, 38.0],
                                     egui::Button::new(ICON_RESTART_ALT).frame(false),
                                 )
                                 .on_hover_text("Reset run")
                                 .clicked()
+                        {
+                            if self
+                                .run
+                                .pending_action
+                                .as_ref()
+                                .is_some_and(|a| a.kind == ActionKind::Send)
                             {
-                                if self
-                                    .run
-                                    .pending_action
-                                    .as_ref()
-                                    .is_some_and(|a| a.kind == ActionKind::Send)
-                                {
-                                    self.message("Wait for the email to finish sending");
-                                } else {
-                                    self.run = MockRun::default();
-                                    self.start_after_connections = false;
-                                }
+                                self.message("Wait for the email to finish sending");
+                            } else {
+                                self.run = MockRun::default();
+                                self.start_after_connections = false;
                             }
                         }
                         ui.add_space(8.0);
@@ -1912,6 +2056,9 @@ impl SkarvaApp {
         egui::TopBottomPanel::top("tabs")
             .exact_height(39.0)
             .show(ctx, |ui| {
+                if self.dialog_open() {
+                    ui.disable();
+                }
                 ui.horizontal_centered(|ui| {
                     ui.add_space(15.0);
                     let tabs = self
@@ -1938,6 +2085,9 @@ impl SkarvaApp {
                             )
                             .clicked()
                         {
+                            if index == self.canvas_index {
+                                continue;
+                            }
                             if self
                                 .run
                                 .pending_action
@@ -1966,7 +2116,8 @@ impl SkarvaApp {
                         }
                     }
                     if ui
-                        .add(
+                        .add_enabled(
+                            !self.run.running(),
                             egui::Button::new(RichText::new(ICON_ADD).size(18.0))
                                 .fill(PANEL)
                                 .frame(false),
@@ -1985,6 +2136,9 @@ impl SkarvaApp {
             .exact_width(238.0)
             .resizable(false)
             .show(ctx, |ui| {
+                if self.dialog_open() || self.run.running() {
+                    ui.disable();
+                }
                 ui.add_space(17.0);
                 ui.horizontal(|ui| {
                     ui.add_space(16.0);
@@ -2019,6 +2173,7 @@ impl SkarvaApp {
             .exact_width(286.0)
             .resizable(false)
             .show(ctx, |ui| {
+                if self.dialog_open() || self.run.running() { ui.disable(); }
                 ui.add_space(17.0);
                 ui.horizontal(|ui| {
                     ui.add_space(15.0);
@@ -2043,7 +2198,7 @@ impl SkarvaApp {
                         ui.add_space(12.0);
                         ui.horizontal(|ui| {
                             ui.add_space(14.0);
-                            ui.label(RichText::new(format!("{from} → {to}")).size(13.0).color(TEXT));
+                            ui.label(RichText::new(format!("{from}  {ICON_ARROW_FORWARD}  {to}")).size(13.0).color(TEXT));
                         });
                         ui.add_space(16.0);
                         ui.horizontal(|ui| {
@@ -2088,13 +2243,12 @@ impl SkarvaApp {
                 {
                     ui.horizontal(|ui| {
                         ui.add_space(12.0);
-                        if ui.small_button("Convert to Yes / No block").clicked() {
-                            if let Some(existing) = self.canvas_mut().and_then(|c| c.node_mut(id)) {
+                        if ui.small_button("Convert to Yes / No block").clicked()
+                            && let Some(existing) = self.canvas_mut().and_then(|c| c.node_mut(id)) {
                                 existing.kind = NodeKind::YesNo;
                                 existing.routes.clear();
                                 self.changed();
                             }
-                        }
                     });
                 }
                 ui.add_space(18.0);
@@ -2152,14 +2306,13 @@ impl SkarvaApp {
                         ui.horizontal(|ui| { ui.add_space(14.0); ui.label(RichText::new("SOURCE FILE").size(11.0).strong().color(MUTED)); });
                         ui.horizontal(|ui| {
                             ui.add_space(12.0);
-                            if ui.button("Choose file…").clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
+                            if ui.button("Choose file…").clicked()
+                                && let Some(path) = rfd::FileDialog::new()
                                     .add_filter("Readable files", &["txt", "md", "csv", "tsv", "json", "pdf", "docx", "xlsx", "pptx"])
                                     .pick_file() {
                                     node.prompt = path.to_string_lossy().into_owned();
                                     changed = true;
                                 }
-                            }
                         });
                         ui.horizontal(|ui| {
                             ui.add_space(14.0);
@@ -2248,8 +2401,8 @@ impl SkarvaApp {
                     }
                 }
                 if remove_last_route {
-                    if let Some(canvas) = self.canvas_mut() {
-                        if let Some(node) = canvas.node_mut(id) {
+                    if let Some(canvas) = self.canvas_mut()
+                        && let Some(node) = canvas.node_mut(id) {
                             node.routes.pop();
                             node.mock_route =
                                 node.mock_route.min(node.routes.len().saturating_sub(1));
@@ -2258,7 +2411,6 @@ impl SkarvaApp {
                                 .edges
                                 .retain(|edge| edge.from != id || edge.output < count);
                         }
-                    }
                     changed = true;
                 }
                 if changed {
@@ -2291,7 +2443,7 @@ impl SkarvaApp {
                                     .unwrap_or_else(|| "Unknown".into());
                                 (
                                     e.id,
-                                    format!("{}  {}", if e.from == id { "→" } else { "←" }, name),
+                                    format!("{}  {}", if e.from == id { "To" } else { "From" }, name),
                                 )
                             })
                             .collect::<Vec<_>>()
@@ -2311,12 +2463,10 @@ impl SkarvaApp {
                             .small_button(ICON_CLOSE)
                             .on_hover_text("Remove connection")
                             .clicked()
-                        {
-                            if let Some(canvas) = self.canvas_mut() {
+                            && let Some(canvas) = self.canvas_mut() {
                                 canvas.edges.retain(|e| e.id != edge_id);
                                 self.changed();
                             }
-                        }
                     });
                 }
                 ui.add_space(22.0);
@@ -2348,6 +2498,9 @@ impl SkarvaApp {
         egui::TopBottomPanel::bottom("run_log")
             .exact_height(height)
             .show(ctx, |ui| {
+                if self.dialog_open() {
+                    ui.disable();
+                }
                 ui.horizontal(|ui| {
                     ui.add_space(13.0);
                     if ui
@@ -2386,7 +2539,11 @@ impl SkarvaApp {
                     ui.label(
                         RichText::new(status)
                             .size(11.0)
-                            .color(if self.run.running() { ACCENT_DETAIL } else { MUTED }),
+                            .color(if self.run.running() {
+                                ACCENT_DETAIL
+                            } else {
+                                MUTED
+                            }),
                     );
                 });
                 if self.show_run_log {
@@ -2434,7 +2591,7 @@ impl SkarvaApp {
                                 ui.label(
                                     RichText::new(format!(
                                         "ATTACHMENT  {filename} · {} KB",
-                                        (size + 1023) / 1024
+                                        size.div_ceil(1024)
                                     ))
                                     .size(11.0)
                                     .strong()
@@ -2455,10 +2612,7 @@ impl SkarvaApp {
                         });
                         ui.horizontal(|ui| {
                             ui.add_space(16.0);
-                            if ui
-                                .add(egui::Button::new("Approve & send").fill(ACCENT))
-                                .clicked()
-                            {
+                            if ui.add(primary_button("Approve & send")).clicked() {
                                 self.approve_send();
                             }
                             if ui.button("Cancel run").clicked() {
@@ -2529,14 +2683,13 @@ impl SkarvaApp {
     }
 
     fn canvas_ui(&mut self, ctx: &egui::Context) {
-        let dialog_open = self.show_integrations
-            || self.renaming_project.is_some()
-            || self.show_new_canvas
-            || self.show_new_project
-            || self.deleting_project.is_some();
+        let dialog_open = self.dialog_open();
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(BG))
             .show(ctx, |ui| {
+                if dialog_open {
+                    ui.disable();
+                }
                 let rect = ui.max_rect();
                 if self.fit_canvas {
                     self.fit_canvas = false;
@@ -2579,7 +2732,10 @@ impl SkarvaApp {
                     None
                 };
                 if pressed {
-                    if let Some((from, output)) = pointer.and_then(|p| self.hit_output(rect, p)) {
+                    if let Some((from, output)) = pointer
+                        .and_then(|p| self.hit_output(rect, p))
+                        .filter(|_| !self.run.running())
+                    {
                         self.connecting = Some((from, output));
                         self.connection_dragging = true;
                         self.connection_menu = None;
@@ -2631,21 +2787,21 @@ impl SkarvaApp {
                                 })
                                 .unwrap_or_default();
                             self.node_drag =
-                                (!multi && !positions.is_empty()).then_some((p, positions));
+                                (!self.run.running() && !multi && !positions.is_empty())
+                                    .then_some((p, positions));
                             self.marquee = None;
                         } else if !hit_node
                             && edge_hit.is_none()
                             && !ui.input(|i| i.key_down(egui::Key::Space))
+                            && let Some(p) = pointer.filter(|p| rect.contains(*p))
                         {
-                            if let Some(p) = pointer.filter(|p| rect.contains(*p)) {
-                                let initial = if multi {
-                                    self.selected_nodes.clone()
-                                } else {
-                                    HashSet::new()
-                                };
-                                self.marquee = Some((p, p, initial));
-                                self.node_drag = None;
-                            }
+                            let initial = if multi {
+                                self.selected_nodes.clone()
+                            } else {
+                                HashSet::new()
+                            };
+                            self.marquee = Some((p, p, initial));
+                            self.node_drag = None;
                         }
                     }
                 }
@@ -2665,23 +2821,23 @@ impl SkarvaApp {
                         }
                     }
                 }
-                if let (Some((start, _, initial)), Some(p)) = (&self.marquee, pointer) {
-                    if down {
-                        let area = Rect::from_two_pos(*start, p);
-                        let mut selection = initial.clone();
-                        if let Some(canvas) = self.canvas() {
-                            for node in &canvas.nodes {
-                                if area.intersects(self.node_rect(rect, node)) {
-                                    selection.insert(node.id);
-                                }
+                if let (Some((start, _, initial)), Some(p)) = (&self.marquee, pointer)
+                    && down
+                {
+                    let area = Rect::from_two_pos(*start, p);
+                    let mut selection = initial.clone();
+                    if let Some(canvas) = self.canvas() {
+                        for node in &canvas.nodes {
+                            if area.intersects(self.node_rect(rect, node)) {
+                                selection.insert(node.id);
                             }
                         }
-                        self.selected_nodes = selection;
-                        self.selected = self.selected_nodes.iter().next().copied();
-                        self.selected_edge = None;
-                        if let Some(marquee) = &mut self.marquee {
-                            marquee.1 = p;
-                        }
+                    }
+                    self.selected_nodes = selection;
+                    self.selected = self.selected_nodes.iter().next().copied();
+                    self.selected_edge = None;
+                    if let Some(marquee) = &mut self.marquee {
+                        marquee.1 = p;
                     }
                 }
                 if !down {
@@ -2742,6 +2898,9 @@ impl SkarvaApp {
                 egui::Popup::context_menu(&response)
                     .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                     .show(|ui| {
+                        if self.run.running() {
+                            ui.disable();
+                        }
                         ui.label(RichText::new("ADD BLOCK").size(10.0).strong().color(MUTED));
                         ui.add_space(4.0);
                         if let Some(kind) =
@@ -2786,12 +2945,12 @@ impl SkarvaApp {
                     }
                     self.connection_dragging = false;
                 }
-                if let Some((from, output)) = self.connecting {
-                    if let Some(node) = self.canvas().and_then(|c| c.node(from)) {
-                        let start = self.output_pos(rect, node, output);
-                        let end = ui.input(|i| i.pointer.hover_pos()).unwrap_or(start);
-                        paint_wire(ui.painter(), start, end, ACCENT_DETAIL, 2.0, false);
-                    }
+                if let Some((from, output)) = self.connecting
+                    && let Some(node) = self.canvas().and_then(|c| c.node(from))
+                {
+                    let start = self.output_pos(rect, node, output);
+                    let end = ui.input(|i| i.pointer.hover_pos()).unwrap_or(start);
+                    paint_wire(ui.painter(), start, end, ACCENT_DETAIL, 2.0, false);
                 }
                 if self.canvas().is_some_and(|c| c.nodes.is_empty()) {
                     let welcome = Rect::from_center_size(rect.center(), Vec2::new(390.0, 190.0));
@@ -2830,13 +2989,12 @@ impl SkarvaApp {
                             });
                             if let Some(kind) = chosen {
                                 let pan = self.pan;
-                                if let Some(id) = self.add_node(kind, None) {
-                                    if let Some(node) =
+                                if let Some(id) = self.add_node(kind, None)
+                                    && let Some(node) =
                                         self.canvas_mut().and_then(|c| c.node_mut(id))
-                                    {
-                                        node.x = pan.x - 124.0;
-                                        node.y = pan.y - 45.0;
-                                    }
+                                {
+                                    node.x = pan.x - 124.0;
+                                    node.y = pan.y - 45.0;
                                 }
                             }
                         });
@@ -3157,6 +3315,7 @@ impl SkarvaApp {
                 if ui
                     .interact(port_rect, Id::new(("out", node.id, output)), Sense::click())
                     .clicked()
+                    && !self.run.running()
                 {
                     self.connecting = Some((node.id, output));
                     self.selected = Some(node.id);
@@ -3178,6 +3337,9 @@ impl SkarvaApp {
                 self.connecting = None;
             }
             response.context_menu(|ui| {
+                if self.run.running() {
+                    ui.disable();
+                }
                 if ui.button("Duplicate").clicked() {
                     self.selected = Some(node.id);
                     self.selected_nodes.clear();
@@ -3205,6 +3367,20 @@ impl SkarvaApp {
             0 => {
                 ui.heading("AI model");
                 ui.label(RichText::new("Writes replies and creates your documents.").color(MUTED));
+                ui.label(
+                    RichText::new("Use your own API key. Your provider's usage charges apply.")
+                        .size(11.0)
+                        .color(MUTED),
+                );
+                let keys_url = match self.llm_provider {
+                    llm::Provider::OpenRouter => "https://openrouter.ai/settings/keys",
+                    llm::Provider::OpenAI => "https://platform.openai.com/api-keys",
+                    llm::Provider::Anthropic => "https://console.anthropic.com/",
+                };
+                ui.hyperlink_to(
+                    format!("Get an {} API key", self.llm_provider.label()),
+                    keys_url,
+                );
                 ui.add_space(15.0);
                 egui::ComboBox::from_id_salt("llm_provider")
                     .width(400.0)
@@ -3620,10 +3796,7 @@ impl SkarvaApp {
                             cancel = true;
                         }
                         save = ui
-                            .add_enabled(
-                                !name.trim().is_empty(),
-                                egui::Button::new("Save name").fill(ACCENT),
-                            )
+                            .add_enabled(!name.trim().is_empty(), primary_button("Save name"))
                             .clicked()
                             || ui.input(|i| i.key_pressed(egui::Key::Enter));
                     });
@@ -3665,16 +3838,33 @@ impl SkarvaApp {
                     let response = ui.add_sized(
                         [310.0, 34.0],
                         egui::TextEdit::singleline(&mut self.new_project_name)
-                            .hint_text("e.g. Project assistant"),
+                            .hint_text("Project name"),
                     );
-                    response.request_focus();
+                    if self.focus_project_name {
+                        response.request_focus();
+                        self.focus_project_name = false;
+                    }
                     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.add_space(10.0);
+                    ui.label(RichText::new("Start with").size(12.0).color(MUTED));
+                    ui.radio_value(&mut self.new_project_template, false, "Blank canvas");
+                    ui.radio_value(
+                        &mut self.new_project_template,
+                        true,
+                        "Text workflow · Play / AI model / End",
+                    );
+                    ui.label(
+                        RichText::new(
+                            "You can change every block later. AI steps use your own API key.",
+                        )
+                        .size(11.0)
+                        .color(MUTED),
+                    );
+                    ui.add_space(8.0);
                     if ui
-                        .add(
-                            egui::Button::new("Create project")
-                                .fill(ACCENT)
-                                .corner_radius(7),
+                        .add_enabled(
+                            !self.new_project_name.trim().is_empty(),
+                            primary_button("Create project"),
                         )
                         .clicked()
                         || enter
@@ -3683,6 +3873,9 @@ impl SkarvaApp {
                     }
                 });
             self.show_new_project &= open;
+            if !self.show_new_project {
+                self.focus_project_name = true;
+            }
         }
         if self.show_new_canvas {
             let mut open = true;
@@ -3699,14 +3892,16 @@ impl SkarvaApp {
                         egui::TextEdit::singleline(&mut self.new_canvas_name)
                             .hint_text("e.g. Incoming requests"),
                     );
-                    response.request_focus();
+                    if self.focus_canvas_name {
+                        response.request_focus();
+                        self.focus_canvas_name = false;
+                    }
                     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
                     ui.add_space(10.0);
                     if ui
-                        .add(
-                            egui::Button::new("Create canvas")
-                                .fill(ACCENT)
-                                .corner_radius(7),
+                        .add_enabled(
+                            !self.new_canvas_name.trim().is_empty(),
+                            primary_button("Create canvas"),
                         )
                         .clicked()
                         || enter
@@ -3729,6 +3924,9 @@ impl SkarvaApp {
                     }
                 });
             self.show_new_canvas &= open;
+            if !self.show_new_canvas {
+                self.focus_canvas_name = true;
+            }
         }
         if let Some(id) = self.deleting_project {
             let mut open = true;
@@ -3835,27 +4033,6 @@ fn distance_to_segment(point: Pos2, start: Pos2, end: Pos2) -> f32 {
     point.distance(start + segment * t)
 }
 
-#[cfg(test)]
-mod geometry_tests {
-    use super::*;
-
-    #[test]
-    fn wire_curve_has_correct_endpoints() {
-        let start = Pos2::new(12.0, 34.0);
-        let end = Pos2::new(200.0, 80.0);
-        assert_eq!(wire_point(start, end, 0.0), start);
-        assert_eq!(wire_point(start, end, 1.0), end);
-    }
-
-    #[test]
-    fn segment_distance_detects_nearby_points() {
-        let start = Pos2::new(0.0, 0.0);
-        let end = Pos2::new(100.0, 0.0);
-        assert!(distance_to_segment(Pos2::new(50.0, 6.0), start, end) <= 7.0);
-        assert!(distance_to_segment(Pos2::new(50.0, 20.0), start, end) > 7.0);
-    }
-}
-
 impl eframe::App for SkarvaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_connections(ctx);
@@ -3876,7 +4053,7 @@ impl eframe::App for SkarvaApp {
                 self.run_panel(ctx);
                 self.canvas_ui(ctx);
                 let editing_text = ctx.wants_keyboard_input();
-                if !editing_text {
+                if !editing_text && !self.dialog_open() && !self.run.running() {
                     let delete = ctx.input(|i| {
                         i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)
                     });
@@ -3904,6 +4081,42 @@ impl eframe::App for SkarvaApp {
 }
 
 fn main() -> eframe::Result {
+    let mut arguments = std::env::args_os().skip(1);
+    while let Some(argument) = arguments.next() {
+        if argument == "--help" || argument == "-h" {
+            println!(
+                "Skarva — An agentic whiteboard\n\nUsage: skarva [--data-dir PATH] [--version]\n\n--data-dir PATH  Use a separate local profile (projects and encrypted vault).\n--version        Print the version.\n--help           Show this help."
+            );
+            return Ok(());
+        } else if argument == "--version" || argument == "-V" {
+            println!("Skarva {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        } else if argument == "--data-dir" {
+            let Some(path) = arguments.next() else {
+                eprintln!("--data-dir requires a path");
+                std::process::exit(2);
+            };
+            let path = std::path::PathBuf::from(path);
+            let path = if path.is_absolute() {
+                path
+            } else {
+                match std::env::current_dir() {
+                    Ok(directory) => directory.join(path),
+                    Err(error) => {
+                        eprintln!("Could not locate current directory: {error}");
+                        std::process::exit(2);
+                    }
+                }
+            };
+            brand::set_data_directory(path);
+        } else {
+            eprintln!(
+                "Unknown option: {}. Run skarva --help for usage.",
+                argument.to_string_lossy()
+            );
+            std::process::exit(2);
+        }
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(brand::NAME)
@@ -3918,4 +4131,106 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(SkarvaApp::new(cc)))),
     )
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+
+    fn test_app(label: &str) -> (SkarvaApp, egui::Context) {
+        let directory =
+            std::env::temp_dir().join(format!("skarva-ui-{label}-{}", std::process::id()));
+        let ctx = egui::Context::default();
+        (SkarvaApp::with_storage(&ctx, Storage { directory }), ctx)
+    }
+
+    #[test]
+    fn adding_blocks_avoids_overlap_and_dropping_respects_zoom() {
+        let (mut app, _ctx) = test_app("placement");
+        app.open_project(Project::new(100, "New workflow"));
+        let start = app.add_node(NodeKind::Start, None).unwrap();
+        let end = app.add_node(NodeKind::End, None).unwrap();
+        let canvas = app.canvas().unwrap();
+        assert!(canvas.node(end).unwrap().x >= canvas.node(start).unwrap().x + 300.0);
+        app.zoom = 0.5;
+        app.pan = Vec2::new(20.0, 30.0);
+        let id = app
+            .add_node(NodeKind::Word, Some(Pos2::new(200.0, 100.0)))
+            .unwrap();
+        let node = app.canvas().unwrap().node(id).unwrap();
+        assert_eq!(
+            Vec2::new(node.x + 124.0, node.y + 40.0),
+            Vec2::new(420.0, 230.0)
+        );
+    }
+
+    #[test]
+    fn local_play_workflow_never_requests_credentials() {
+        let (mut app, _ctx) = test_app("local");
+        let mut project = Project::text_workflow(101, "Local workflow");
+        project.canvases[0].nodes.remove(1);
+        project.canvases[0].edges.remove(1);
+        project.canvases[0].edges[0].to = 4;
+        app.open_project(project);
+        app.start_run();
+        assert!(app.run.running());
+        assert!(app.connection_receiver.is_none());
+        assert!(!app.show_integrations);
+    }
+
+    #[test]
+    fn yes_no_requires_both_answers_before_requesting_services() {
+        let (mut app, _ctx) = test_app("yes-no");
+        let mut project = Project::text_workflow(103, "Routing");
+        project.canvases[0].nodes[1].kind = NodeKind::YesNo;
+        app.open_project(project);
+        app.start_run();
+        assert!(!app.run.running());
+        assert!(app.connection_receiver.is_none());
+        assert!(app.toast.as_ref().unwrap().0.contains("both Yes and No"));
+    }
+
+    #[test]
+    fn home_and_editor_render_at_minimum_window_size() {
+        let (mut app, ctx) = test_app("layout");
+        for editor in [false, true] {
+            if editor {
+                app.open_project(Project::text_workflow(102, "Writing"));
+            }
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(960.0, 620.0))),
+                    ..Default::default()
+                },
+                |ctx| {
+                    if editor {
+                        app.toolbar(ctx);
+                        app.library(ctx);
+                        app.inspector(ctx);
+                        app.run_panel(ctx);
+                        app.canvas_ui(ctx);
+                    } else {
+                        app.project_browser(ctx);
+                    }
+                },
+            );
+            assert!(!output.shapes.is_empty());
+        }
+    }
+
+    #[test]
+    fn wire_curve_has_correct_endpoints() {
+        let start = Pos2::new(12.0, 34.0);
+        let end = Pos2::new(200.0, 80.0);
+        assert_eq!(wire_point(start, end, 0.0), start);
+        assert_eq!(wire_point(start, end, 1.0), end);
+    }
+
+    #[test]
+    fn segment_distance_detects_nearby_points() {
+        let start = Pos2::new(0.0, 0.0);
+        let end = Pos2::new(100.0, 0.0);
+        assert!(distance_to_segment(Pos2::new(50.0, 6.0), start, end) <= 7.0);
+        assert!(distance_to_segment(Pos2::new(50.0, 20.0), start, end) > 7.0);
+    }
 }

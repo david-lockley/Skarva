@@ -3,6 +3,9 @@ name = "skarva"
 version = "0.1.0"
 edition = "2024"
 description = "Skarva — an agentic whiteboard for connected work"
+repository = "https://github.com/david-lockley/skarva"
+readme = "README.md"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [package.metadata.winresource]
 ProductName = "Skarva"
@@ -12,7 +15,7 @@ OriginalFilename = "skarva.exe"
 
 [dependencies]
 eframe = { version = "0.32", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
-wgpu = { version = "25", default-features = false, features = ["metal", "dx12", "vulkan"] }
+wgpu = { version = "25", default-features = false, features = ["metal", "dx12", "vulkan", "gles"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 directories = "6"
@@ -24,10 +27,13 @@ base64 = "0.22"
 ring = "0.17"
 url = "2"
 webbrowser = "1.2"
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 quick-xml = "0.41"
 pdf-extract = "0.12.1"
 rfd = "0.17.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
 [build-dependencies]
 winresource = "0.1.34"

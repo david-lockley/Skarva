@@ -83,7 +83,7 @@ pub fn generate(
         provider,
         model,
         &system,
-        &format!("Incoming email:\n{email}"),
+        &format!("Incoming request and workflow context:\n{email}"),
     )?;
     let (title, summary, bytes, extension, mime) = match render_document(kind, &answer) {
         Ok(document) => document,
@@ -95,7 +95,7 @@ pub fn generate(
                 provider,
                 model,
                 &retry_system,
-                &format!("Incoming email:\n{email}"),
+                &format!("Incoming request and workflow context:\n{email}"),
             )?;
             render_document(kind, &retry).map_err(|error| {
                 format!("The model returned unusable document data after one retry: {error}")
@@ -131,7 +131,7 @@ pub fn generate(
 type RenderedDocument = (String, String, Vec<u8>, &'static str, &'static str);
 
 fn render_document(kind: NodeKind, answer: &str) -> Result<RenderedDocument, String> {
-    let json = extract_json(&answer)?;
+    let json = extract_json(answer)?;
     Ok(match kind {
         NodeKind::Word => {
             let spec: WordSpec = serde_json::from_str(json)
@@ -387,7 +387,7 @@ fn word_paragraph(value: &str, style: &str) -> String {
 fn make_xlsx(spec: &SheetSpec) -> Result<Vec<u8>, String> {
     let mut cols = String::new();
     for (index, heading) in spec.columns.iter().enumerate() {
-        let width = heading.chars().count().max(18).min(38);
+        let width = heading.chars().count().clamp(18, 38);
         cols.push_str(&format!(
             "<col min=\"{}\" max=\"{}\" width=\"{}\" customWidth=\"1\"/>",
             index + 1,
@@ -502,10 +502,7 @@ fn ppt_slide(slide: &SlideSpec, number: usize) -> String {
     let mut shapes = ppt_text_shape(
         2,
         &slide.title,
-        640000,
-        480000,
-        10900000,
-        900000,
+        (640000, 480000, 10900000, 900000),
         3200,
         true,
     );
@@ -513,10 +510,7 @@ fn ppt_slide(slide: &SlideSpec, number: usize) -> String {
         shapes.push_str(&ppt_text_shape(
             index + 3,
             &format!("• {bullet}"),
-            800000,
-            1550000 + index as i64 * 790000,
-            10500000,
-            650000,
+            (800000, 1550000 + index as i64 * 790000, 10500000, 650000),
             2200,
             false,
         ));
@@ -527,13 +521,11 @@ fn ppt_slide(slide: &SlideSpec, number: usize) -> String {
 fn ppt_text_shape(
     id: usize,
     value: &str,
-    x: i64,
-    y: i64,
-    width: i64,
-    height: i64,
+    bounds: (i64, i64, i64, i64),
     size: usize,
     bold: bool,
 ) -> String {
+    let (x, y, width, height) = bounds;
     format!(
         "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"Text {id}\"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{width}\" cy=\"{height}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap=\"square\"/><a:lstStyle/><a:p><a:r><a:rPr lang=\"en-US\" sz=\"{size}\" b=\"{}\"><a:solidFill><a:srgbClr val=\"202427\"/></a:solidFill><a:latin typeface=\"Aptos\"/></a:rPr><a:t>{}</a:t></a:r><a:endParaRPr lang=\"en-US\"/></a:p></p:txBody></p:sp>",
         if bold { 1 } else { 0 },

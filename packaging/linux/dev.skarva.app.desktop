@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Skarva
+Comment=Build connected workflows on an agentic whiteboard
+Exec=skarva
+Icon=dev.skarva.app
+Terminal=false
+Categories=Office;Utility;
+Keywords=workflow;automation;canvas;agents;
+StartupWMClass=dev.skarva.app

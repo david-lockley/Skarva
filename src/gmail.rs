@@ -154,7 +154,10 @@ pub fn connect() -> Result<(), String> {
                 }
                 let code = params.get("code").map(|value| value.as_ref());
                 let Some(code) = code else {
-                    let page = format!("Gmail connection was cancelled. You can return to {}.", crate::brand::NAME);
+                    let page = format!(
+                        "Gmail connection was cancelled. You can return to {}.",
+                        crate::brand::NAME
+                    );
                     let response = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                         page.len(),

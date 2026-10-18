@@ -1,0 +1,58 @@
+name: Desktop checks
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --version 0.22.2 --locked
+      - run: cargo audit --file Cargo.lock
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libdbus-1-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libegl1-mesa-dev libvulkan1
+      - run: cargo fmt --all --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: |
+          sh scripts/package-macos.sh release
+          ditto -c -k --sequesterRsrc --keepParent target/release/Skarva.app target/release/skarva-macos.zip
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: sh scripts/package-linux.sh
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skarva-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            target/release/skarva-*.zip
+            target/release/skarva-*.tar.gz
+          if-no-files-found: error

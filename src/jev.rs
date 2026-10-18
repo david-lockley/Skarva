@@ -143,7 +143,9 @@ pub fn route(request: RouteRequest) -> Result<RouteAnswer, String> {
                 thread::sleep(Duration::from_millis(300 * (1 << attempt)));
             }
             Err(ureq::Error::StatusCode(401)) => {
-                return Err("TypeSafe rejected the API key. Check Jev settings".into());
+                return Err(
+                    "TypeSafe rejected the API key. Check Integrations → Jev decisions".into(),
+                );
             }
             Err(ureq::Error::StatusCode(status)) => {
                 return Err(format!("Jev request failed (HTTP {status})"));

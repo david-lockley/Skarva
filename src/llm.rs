@@ -68,7 +68,9 @@ pub fn generate(
         provider,
         model,
         instructions,
-        &format!("Incoming email:\n{email}\n\nWrite only the email reply body."),
+        &format!(
+            "Incoming request and workflow context:\n{email}\n\nReturn only the requested text. If a reply is requested, return only its body."
+        ),
     )
 }
 

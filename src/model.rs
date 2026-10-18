@@ -112,10 +112,10 @@ impl NodeKind {
             Self::YesNo => "Answer a yes or no question",
             Self::Note => "Canvas annotation",
             Self::End => "Finish a path",
-            Self::Copilot => "Assistant step · prototype",
+            Self::Copilot => "Integration unavailable",
             Self::OpenAI => "Draft or transform text",
-            Self::Teams => "Message step · prototype",
-            Self::Outlook => "Email step · prototype",
+            Self::Teams => "Integration unavailable",
+            Self::Outlook => "Integration unavailable",
             Self::Excel => "Create an editable spreadsheet",
             Self::Word => "Create an editable document",
             Self::PowerPoint => "Create an editable presentation",
@@ -133,10 +133,10 @@ impl NodeKind {
             Self::Start => "Run with a starting message",
             Self::Decision => "Choose a route",
             Self::YesNo => "Yes or no",
-            Self::Copilot => "Prototype · no connection",
+            Self::Copilot => "Integration unavailable",
             Self::OpenAI => "Configured LLM provider",
-            Self::Teams => "Prototype · no connection",
-            Self::Outlook => "Prototype · no connection",
+            Self::Teams => "Integration unavailable",
+            Self::Outlook => "Integration unavailable",
             Self::Excel => "Generate an XLSX file",
             Self::Word => "Generate a DOCX file",
             Self::PowerPoint => "Generate a PPTX file",
@@ -210,10 +210,10 @@ impl Node {
             routes,
             threshold: default_threshold(),
             prompt: match kind {
-                NodeKind::OpenAI => "Write a concise, helpful reply to this email. Do not invent facts. Ask for clarification when needed.".into(),
-                NodeKind::Word => "Write a useful guide that directly answers the email request.".into(),
+                NodeKind::OpenAI => "Respond to the incoming request clearly and concisely. Do not invent facts. Ask for clarification when needed.".into(),
+                NodeKind::Word => "Create a useful document that directly answers the incoming request.".into(),
                 NodeKind::Excel => "Organize the requested information into a useful table with clear headings.".into(),
-                NodeKind::PowerPoint => "Create a concise presentation that directly answers the email request.".into(),
+                NodeKind::PowerPoint => "Create a concise presentation that directly answers the incoming request.".into(),
                 NodeKind::WebSearch => "Find reliable sources relevant to the incoming request.".into(),
                 NodeKind::Recall | NodeKind::Remember => "{sender}".into(),
                 _ => String::new(),
@@ -274,6 +274,60 @@ pub struct Canvas {
 }
 
 impl Canvas {
+    pub fn validate(&self) -> Result<(), String> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+        let ids: HashSet<_> = self.nodes.iter().map(|n| n.id).collect();
+        if ids.len() != self.nodes.len() {
+            return Err("A canvas contains duplicate block IDs".into());
+        }
+        let mut indegree: HashMap<_, usize> = ids.iter().map(|id| (*id, 0)).collect();
+        let mut connections = HashSet::new();
+        for node in &self.nodes {
+            if !node.x.is_finite() || !node.y.is_finite() || !(0.0..=1.0).contains(&node.threshold)
+            {
+                return Err("A block has invalid position or confidence settings".into());
+            }
+        }
+        for edge in &self.edges {
+            let from = self
+                .node(edge.from)
+                .ok_or("A connection starts at a missing block")?;
+            let to = self
+                .node(edge.to)
+                .ok_or("A connection ends at a missing block")?;
+            if edge.from == edge.to
+                || edge.output >= from.output_count()
+                || !to.kind.accepts_input()
+            {
+                return Err("A connection uses an invalid block port".into());
+            }
+            if !connections.insert((edge.from, edge.output, edge.to)) {
+                return Err("A canvas contains a duplicate connection".into());
+            }
+            *indegree.get_mut(&edge.to).unwrap() += 1;
+        }
+        let mut ready: VecDeque<_> = indegree
+            .iter()
+            .filter(|(_, degree)| **degree == 0)
+            .map(|(id, _)| *id)
+            .collect();
+        let mut count = 0;
+        while let Some(id) = ready.pop_front() {
+            count += 1;
+            for edge in self.edges.iter().filter(|e| e.from == id) {
+                let degree = indegree.get_mut(&edge.to).unwrap();
+                *degree -= 1;
+                if *degree == 0 {
+                    ready.push_back(edge.to);
+                }
+            }
+        }
+        if count != self.nodes.len() {
+            return Err("This workflow contains a loop. Remove the connection that leads back to an earlier block.".into());
+        }
+        Ok(())
+    }
+
     pub fn new(id: u64, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -301,6 +355,109 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn duplicate_nodes(
+        &mut self,
+        canvas_index: usize,
+        selected: &std::collections::HashSet<u64>,
+    ) -> Vec<u64> {
+        use std::collections::HashMap;
+        let Some(canvas) = self.canvases.get(canvas_index) else {
+            return Vec::new();
+        };
+        let nodes: Vec<_> = canvas
+            .nodes
+            .iter()
+            .filter(|n| selected.contains(&n.id))
+            .cloned()
+            .collect();
+        let edges: Vec<_> = canvas
+            .edges
+            .iter()
+            .filter(|e| selected.contains(&e.from) && selected.contains(&e.to))
+            .cloned()
+            .collect();
+        let mut mapping = HashMap::new();
+        let mut copies = Vec::new();
+        for mut node in nodes {
+            let id = self.allocate_id();
+            mapping.insert(node.id, id);
+            node.id = id;
+            node.x += 32.0;
+            node.y += 32.0;
+            copies.push(id);
+            self.canvases[canvas_index].nodes.push(node);
+        }
+        for edge in edges {
+            let id = self.allocate_id();
+            self.canvases[canvas_index].edges.push(Edge {
+                id,
+                from: mapping[&edge.from],
+                to: mapping[&edge.to],
+                output: edge.output,
+            });
+        }
+        copies
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        use std::collections::HashSet;
+        if self.version != 1 {
+            return Err("This project format is not supported by this version of Skarva".into());
+        }
+        if self.name.trim().is_empty() {
+            return Err("The project needs a name".into());
+        }
+        if self.canvases.is_empty() || self.canvases.len() > 64 {
+            return Err("Projects must contain between 1 and 64 canvases".into());
+        }
+        let mut ids = HashSet::new();
+        for canvas in &self.canvases {
+            if canvas.nodes.len() > 2_000 || canvas.edges.len() > 8_000 {
+                return Err("This canvas exceeds the 2,000 block or 8,000 connection limit".into());
+            }
+            for id in std::iter::once(canvas.id)
+                .chain(canvas.nodes.iter().map(|n| n.id))
+                .chain(canvas.edges.iter().map(|e| e.id))
+            {
+                if !ids.insert(id) {
+                    return Err("The project contains duplicate IDs".into());
+                }
+            }
+            canvas.validate()?;
+        }
+        if ids.iter().max().is_some_and(|id| *id >= self.next_id) {
+            return Err("The project has an invalid next ID".into());
+        }
+        Ok(())
+    }
+
+    pub fn text_workflow(id: u64, name: impl Into<String>) -> Self {
+        let mut project = Self::new(id, name);
+        let mut start = Node::new(2, NodeKind::Start, 0.0, 0.0);
+        start.prompt = "Explain a topic you are interested in, in a few clear sentences.".into();
+        let mut model = Node::new(3, NodeKind::OpenAI, 340.0, 0.0);
+        model.prompt =
+            "Respond to the incoming request clearly and concisely. Return the answer directly."
+                .into();
+        project.canvases[0].nodes = vec![start, model, Node::new(4, NodeKind::End, 680.0, 0.0)];
+        project.canvases[0].edges = vec![
+            Edge {
+                id: 5,
+                from: 2,
+                output: 0,
+                to: 3,
+            },
+            Edge {
+                id: 6,
+                from: 3,
+                output: 0,
+                to: 4,
+            },
+        ];
+        project.next_id = 7;
+        project
+    }
+
     pub fn remove_memory_blocks(&mut self) -> bool {
         let mut changed = false;
         for canvas in &mut self.canvases {
@@ -372,9 +529,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn starter_and_duplicate_selection_keep_valid_internal_connections() {
+        let mut project = Project::text_workflow(100, "Writing");
+        project.validate().unwrap();
+        let copies = project.duplicate_nodes(0, &std::collections::HashSet::from([3, 4]));
+        assert_eq!(copies.len(), 2);
+        let canvas = &project.canvases[0];
+        assert_eq!(canvas.nodes.len(), 5);
+        assert_eq!(canvas.edges.len(), 3);
+        let copied_edge = canvas.edges.last().unwrap();
+        assert_eq!((copied_edge.from, copied_edge.to), (copies[0], copies[1]));
+        assert!(
+            !canvas
+                .edges
+                .iter()
+                .any(|e| e.from == 2 && e.to == copies[0])
+        );
+        project.validate().unwrap();
+    }
+
+    #[test]
+    fn validation_rejects_loops_broken_ports_and_bad_id_allocation() {
+        let mut project = Project::text_workflow(100, "Writing");
+        project.canvases[0].nodes[2].kind = NodeKind::OpenAI;
+        project.canvases[0].edges.push(Edge {
+            id: 7,
+            from: 4,
+            output: 0,
+            to: 3,
+        });
+        project.next_id = 8;
+        assert!(project.validate().unwrap_err().contains("loop"));
+        project.canvases[0].edges.pop();
+        project.canvases[0].edges[0].output = 99;
+        assert!(project.validate().unwrap_err().contains("port"));
+        project.canvases[0].edges[0].output = 0;
+        project.next_id = 3;
+        assert!(project.validate().unwrap_err().contains("next ID"));
+        project.next_id = 8;
+        project.canvases[0].nodes[0].threshold = f32::NAN;
+        assert!(project.validate().is_err());
+    }
+
+    #[test]
     fn showcase_loads_with_both_inferred_entry_points() {
         let project: Project =
-            serde_json::from_str(include_str!("../examples/streamlined-assistant.json")).unwrap();
+            serde_json::from_str(include_str!("../examples/connected-workflows.json")).unwrap();
+        project.validate().unwrap();
         assert_eq!(project.canvases.len(), 2);
         assert_eq!(project.canvases[0].nodes[0].kind, NodeKind::Start);
         assert_eq!(project.canvases[1].nodes[0].kind, NodeKind::GmailInbox);

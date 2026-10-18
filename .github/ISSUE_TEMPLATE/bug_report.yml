@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible problem in Skarva
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version and operating system
+      placeholder: Skarva 0.1.0, Windows 11 / macOS / Linux distribution
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use invented input. Remove API keys, email addresses, personal prompts, and file paths from attachments.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

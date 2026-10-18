@@ -67,7 +67,7 @@ impl Vault {
                 key
             }
             Err(Error::NoEntry) => return Err("The credential vault exists but its OS key is missing. Restore the vault key before reconnecting services.".into()),
-            Err(error) => return Err(format!("Could not unlock saved connections: {error}. Reopen the app to try again.")),
+            Err(error) => return Err(format!("Could not unlock saved connections: {error}. {} Reopen the app to try again.", keyring_help())),
         };
         Self::with_key(path, key)
     }
@@ -223,6 +223,17 @@ impl Vault {
         self.persist(&values)?;
         self.values.remove(name);
         Ok(())
+    }
+}
+
+fn keyring_help() -> &'static str {
+    #[cfg(target_os = "linux")]
+    {
+        "Start and unlock a Secret Service keyring, such as GNOME Keyring or KeePassXC with Secret Service enabled."
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        "Allow access to the Skarva vault in your system credential manager."
     }
 }
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "id": 1792329000000,
-  "name": "Your project assistant",
+  "name": "Connected workflows",
   "next_id": 26,
   "canvases": [
     {
@@ -11,10 +11,10 @@
         {
           "id": 2, "kind": "Start", "title": "Describe your task",
           "subtitle": "Select to change the request", "x": -300, "y": -45,
-          "prompt": "Create a short kickoff checklist for a small internal project. Include objectives to agree on, roles to assign, a 30-minute first meeting agenda, and open questions. We have not chosen owners or dates yet; leave those to be confirmed."
+          "prompt": "Create a short checklist for organizing a community reading group. Include how to choose a book, plan a first meeting, and welcome new members. Leave names, dates, and locations to be confirmed."
         },
         {
-          "id": 3, "kind": "Word", "title": "Create a project brief",
+          "id": 3, "kind": "Word", "title": "Create a checklist",
           "subtitle": "An editable Word document", "x": 40, "y": -45,
           "prompt": "Create a clear, practical document that fulfills the current request. Keep it concise. State assumptions and unanswered questions. Never invent people, dates, figures, or completed actions."
         }
@@ -23,11 +23,11 @@
     },
     {
       "id": 5,
-      "name": "Email assistant",
+      "name": "Email workflow",
       "nodes": [
         {
           "id": 6, "kind": "GmailInbox", "title": "An email arrives",
-          "subtitle": "Your next assignment starts here", "x": -610, "y": 0,
+          "subtitle": "Start from an unread email", "x": -610, "y": 0,
           "threshold": 0.75,
           "decision_question": "Choose the best next step for the incoming assignment. Choose Research the web first if current public information is essential and not already supplied. Otherwise choose the requested or most useful file: Word for written plans and guides, Excel for structured trackers and comparisons, or PowerPoint for presentations. Choose Write the reply for a short text answer or to ask for essential missing details. Never search for confidential company information."
         },

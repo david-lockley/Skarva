@@ -1,0 +1,18 @@
+Skarva — third-party dependency licenses
+
+Generated with cargo-about from the dependency versions in Cargo.lock.
+Dependencies retain their own licenses. This report covers supported desktop targets.
+Original crate source packages are available at https://crates.io/crates/NAME/VERSION.
+
+{{#each licenses}}
+========================================================================
+{{name}} ({{id}})
+
+Used by:
+{{#each used_by}}
+  {{crate.name}} {{crate.version}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}

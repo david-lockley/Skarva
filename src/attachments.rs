@@ -137,10 +137,21 @@ fn office_xml(bytes: &[u8], path: &str) -> Result<String, String> {
     xml_text(&entry(&mut zip, path)?)
 }
 
+fn archive_names(zip: &ZipArchive<Cursor<&[u8]>>) -> Result<Vec<String>, String> {
+    (0..zip.len())
+        .map(|index| {
+            zip.name_for_index(index)
+                .ok_or_else(|| "Invalid Office archive index".to_owned())?
+                .map(|name| name.into_owned())
+                .map_err(|_| "Invalid filename in Office archive".to_owned())
+        })
+        .collect()
+}
+
 fn presentation_text(bytes: &[u8]) -> Result<String, String> {
     let mut zip = archive(bytes)?;
-    let mut slides = (0..zip.len())
-        .filter_map(|index| zip.name_for_index(index).map(str::to_owned))
+    let mut slides = archive_names(&zip)?
+        .into_iter()
         .filter(|name| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
         .collect::<Vec<_>>();
     slides.sort();
@@ -162,8 +173,8 @@ fn spreadsheet_text(bytes: &[u8]) -> Result<String, String> {
         .map(|xml| shared_strings(&xml))
         .transpose()?
         .unwrap_or_default();
-    let mut sheets = (0..zip.len())
-        .filter_map(|index| zip.name_for_index(index).map(str::to_owned))
+    let mut sheets = archive_names(&zip)?
+        .into_iter()
         .filter(|name| name.starts_with("xl/worksheets/sheet") && name.ends_with(".xml"))
         .collect::<Vec<_>>();
     sheets.sort();

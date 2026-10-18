@@ -1,5 +1,11 @@
 # Third-party notices
 
+Rust dependency license texts and package versions for the supported desktop
+targets are collected in [licenses/THIRD_PARTY.txt](licenses/THIRD_PARTY.txt).
+They retain their own licenses, independently of Skarva's noncommercial license.
+Unmodified source packages are available from the crates.io registry at their
+listed versions, including the MPL-2.0 `option-ext` source.
+
 Skarva uses **Material Symbols Rounded** for its interface icons. The icon font is
 Copyright Google LLC and is licensed under the Apache License, Version 2.0.
 The complete license is included at `licenses/Apache-2.0.txt`.
