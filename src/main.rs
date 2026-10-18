@@ -1661,17 +1661,24 @@ impl SkarvaApp {
                             .corner_radius(7),
                     );
                 });
-                ui.with_layout(egui::Layout::bottom_up(Align::LEFT), |ui| {
+                ui.with_layout(egui::Layout::bottom_up(Align::Center), |ui| {
                     ui.add_space(18.0);
                     ui.label(
                         RichText::new(format!("Version {} · Preview", env!("CARGO_PKG_VERSION")))
                             .size(10.0)
                             .color(MUTED),
                     );
-                    ui.hyperlink_to(
-                        "Help & setup",
-                        "https://github.com/david-lockley/skarva/blob/main/docs/SETUP.md",
-                    );
+                    if ui
+                        .add_sized(
+                            [180.0, 38.0],
+                            egui::Button::new(format!("{}   Help & setup", ICON_HELP)).frame(false),
+                        )
+                        .clicked()
+                    {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(
+                            "https://github.com/david-lockley/skarva/blob/main/docs/SETUP.md",
+                        ));
+                    }
                     if ui
                         .add_sized(
                             [180.0, 38.0],
@@ -1686,16 +1693,14 @@ impl SkarvaApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(BG).inner_margin(32.0))
             .show(ctx, |ui| {
-                if self.dialog_open() { ui.disable(); }
+                if self.dialog_open() {
+                    ui.disable();
+                }
                 ui.add_space(14.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(RichText::new("Projects").size(28.0).strong());
-                        ui.label(
-                            RichText::new(brand::TAGLINE)
-                                .size(13.0)
-                                .color(MUTED),
-                        );
+                        ui.label(RichText::new(brand::TAGLINE).size(13.0).color(MUTED));
                     });
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                         if ui
@@ -1707,7 +1712,10 @@ impl SkarvaApp {
                         {
                             self.show_new_project = true;
                         }
-                        if ui.add_sized([90.0, 38.0], egui::Button::new("Import…").frame(false)).clicked() {
+                        if ui
+                            .add_sized([90.0, 38.0], egui::Button::new("Import…").frame(false))
+                            .clicked()
+                        {
                             self.import_project();
                         }
                     });
@@ -1754,12 +1762,12 @@ impl SkarvaApp {
                         );
                         if query.is_empty() {
                             ui.add_space(12.0);
-                            if ui.add(primary_button("Create your first project")).clicked() {
+                            if ui
+                                .add(primary_button("Create your first project"))
+                                .clicked()
+                            {
                                 self.show_new_project = true;
                             }
-                            ui.add_space(10.0);
-                            ui.label(RichText::new("Start with a blank canvas or a ready-to-connect text workflow.").size(12.0).color(MUTED));
-                            ui.label(RichText::new("Connect only the services your workflow needs.").size(12.0).color(MUTED));
                         }
                     });
                 } else {
@@ -1893,17 +1901,23 @@ impl SkarvaApp {
                                     {
                                         let mut menu_ui = ui
                                             .new_child(egui::UiBuilder::new().max_rect(menu_rect));
-                                        menu_ui.menu_button(ICON_MORE_HORIZ, |ui| {
-                                            if ui.button("Rename").clicked() {
-                                                self.renaming_project =
-                                                    Some((project.id, project.name.clone()));
-                                                ui.close();
-                                            }
-                                            if ui.button("Delete…").clicked() {
-                                                self.deleting_project = Some(project.id);
-                                                ui.close();
-                                            }
-                                        });
+                                        egui::containers::menu::MenuButton::from_button(
+                                            egui::Button::new(ICON_MORE_HORIZ).frame(false),
+                                        )
+                                        .ui(
+                                            &mut menu_ui,
+                                            |ui| {
+                                                if ui.button("Rename").clicked() {
+                                                    self.renaming_project =
+                                                        Some((project.id, project.name.clone()));
+                                                    ui.close();
+                                                }
+                                                if ui.button("Delete…").clicked() {
+                                                    self.deleting_project = Some(project.id);
+                                                    ui.close();
+                                                }
+                                            },
+                                        );
                                     }
                                     response.context_menu(|ui| {
                                         if ui.button("Rename").clicked() {
@@ -1984,7 +1998,10 @@ impl SkarvaApp {
                     {
                         self.renaming_project = Some((project.id, project.name.clone()));
                     }
-                    ui.menu_button(ICON_MORE_HORIZ, |ui| {
+                    egui::containers::menu::MenuButton::from_button(
+                        egui::Button::new(ICON_MORE_HORIZ).frame(false),
+                    )
+                    .ui(ui, |ui| {
                         if ui.button("Export project…").clicked() {
                             self.export_project();
                             ui.close();
