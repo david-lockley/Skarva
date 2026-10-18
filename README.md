@@ -51,6 +51,8 @@ cargo run --release
 
 On Linux, install the [desktop build dependencies](docs/DEVELOPMENT.md#linux) first. macOS and Windows need their usual Rust compiler tools. Packaging scripts and CI builds are included for all three platforms.
 
+Version-tagged releases build macOS ZIP/DMG packages (Apple Silicon and Intel), Windows x64 ZIP/installers, and Linux x64 tar.gz/DEB packages automatically. [Release and versioning guide →](docs/RELEASING.md)
+
 **Current stage: early preview.** The app runs locally on macOS; Windows and Linux have build and packaging support, with automated checks configured. Check the [release checklist](docs/RELEASE_CHECKLIST.md) for what has actually been verified before distributing a build.
 
 ## Connect only what you need

@@ -10,8 +10,9 @@
     <key>CFBundleName</key><string>Skarva</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>0.0.0</string>
+    <key>CFBundleVersion</key><string>0.0.0</string>
+    <key>SkarvaVersion</key><string>generated-from-Cargo.toml</string>
     <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

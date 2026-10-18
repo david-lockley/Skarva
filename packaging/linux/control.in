@@ -1,0 +1,13 @@
+Package: skarva
+Version: @VERSION@
+Architecture: @ARCHITECTURE@
+Section: utils
+Priority: optional
+Maintainer: David Lockley <david-lockley@users.noreply.github.com>
+Homepage: https://github.com/david-lockley/skarva
+Depends: libc6 (>= 2.35), libdbus-1-3, libxkbcommon0, libxkbcommon-x11-0, libx11-6, libegl1
+Recommends: libvulkan1, xdg-desktop-portal, gnome-keyring | keepassxc
+Description: An agentic whiteboard for connected workflows
+ Build connected agents on a native canvas with AI routing, research,
+ documents, and email. Free for noncommercial use under PolyForm
+ Noncommercial 1.0.0; commercial use requires separate permission.

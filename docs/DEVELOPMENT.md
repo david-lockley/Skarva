@@ -8,7 +8,7 @@ Install Xcode Command Line Tools (`xcode-select --install`), then run `cargo run
 
 ## Windows
 
-Install Rust's MSVC toolchain and Visual Studio Build Tools with Desktop development with C++. The Windows SDK supplies the resource compiler for the embedded app icon. Run `cargo run --release` or `./scripts/package-windows.ps1` in PowerShell. The latter produces a ZIP containing `skarva.exe` and license notices. The release app does not open a console window. Public builds are currently unsigned and can trigger SmartScreen.
+Install Rust's MSVC toolchain and Visual Studio Build Tools with Desktop development with C++. The Windows SDK supplies the resource compiler for the embedded app icon. Run `cargo run --release` to build/run. For packaging, install NSIS (`choco install nsis`), then run `./scripts/package-windows.ps1` in PowerShell. It produces a portable ZIP and per-user installer, including license notices. The release app does not open a console window. Public builds are currently unsigned and can trigger SmartScreen.
 
 ## Linux
 
@@ -21,7 +21,7 @@ cargo run --release
 
 Use a graphical session with X11 or Wayland, Vulkan or OpenGL/EGL drivers, and an unlocked Secret Service provider (GNOME Keyring, or KeePassXC with Secret Service enabled). File dialogs require a working `xdg-desktop-portal` and a desktop-specific portal backend. Minimal window managers may require installing and starting these services explicitly.
 
-`sh scripts/package-linux.sh` creates an architecture-specific tarball. Extract it and run `./skarva`. For application-menu integration, install the binary on your PATH as `skarva`, copy `share/applications/dev.skarva.app.desktop` into `~/.local/share/applications/`, and copy the PNG under `share/icons/` into the corresponding `~/.local/share/icons/` directory. The tarball relies on the host's desktop libraries and is not a static universal Linux build.
+`sh scripts/package-linux.sh` creates a versioned, architecture-specific tarball and, when `dpkg-deb` is available, a DEB. The DEB installs the app, icon, and menu entry. For the tarball, extract it and run `./skarva`. For manual application-menu integration, install the binary on your PATH as `skarva`, copy `share/applications/dev.skarva.app.desktop` into `~/.local/share/applications/`, and copy the PNG under `share/icons/` into the corresponding `~/.local/share/icons/` directory. The tarball relies on the host's desktop libraries and is not a static universal Linux build.
 
 ## Checks
 
@@ -32,6 +32,8 @@ cargo test --locked
 ```
 
 GitHub Actions runs these checks and builds native packages on macOS, Windows, and Ubuntu. CI compilation does not replace testing trackpad controls, keyring access, file dialogs, and OAuth in a real desktop session.
+
+Release automation and version changes are documented in [RELEASING.md](RELEASING.md). Its Python 3.11+ helpers are maintainer tools; running the desktop app does not require Python. Check them with `python3 -m unittest discover -s tests`.
 
 For clean-profile QA, run `cargo run -- --data-dir /absolute/path/to/test-profile`. This keeps test projects separate from your normal data. Do not connect live accounts unless a test requires them. `--help` and `--version` also work without a display server in debug builds.
 

@@ -8,6 +8,7 @@ Release target: **0.1.0 preview**, source available under PolyForm Noncommercial
 - [x] Linux Secret Service support and OpenGL/EGL fallback alongside Vulkan.
 - [x] Windows executable resources and portable ZIP packaging; Linux tarball/desktop entry; macOS app packaging.
 - [x] Native build/test/package CI configured for macOS, Windows, and Ubuntu.
+- [x] Matching version tags automate publication after all checks/builds pass, with eight packages and a checksum manifest. Apple Silicon ZIP and DMG built locally; DMG integrity and generated bundle versions verified. Other native packaging jobs still need their first GitHub run.
 - [x] Dependency license report generated for the supported desktop targets, included in packages.
 - [x] Rust unit/regression suite: 31 passed, one optional sample-writing test ignored. Covers graph validity, group duplication, import safety, credential encryption/integrity/legacy compatibility, Office formats, attachments, MIME, routing response validation, and clean-profile UI smoke checks.
 - [x] Code formatting and strict Clippy checks on macOS.

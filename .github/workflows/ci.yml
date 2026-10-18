@@ -1,4 +1,4 @@
-name: Desktop checks
+name: Desktop builds and releases
 
 on:
   push:
@@ -11,7 +11,24 @@ permissions:
   contents: read
 
 jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: python3 scripts/release.py check
+      - run: python3 -m unittest discover -s tests
+
   dependency-audit:
+    needs: version
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +37,23 @@ jobs:
       - run: cargo audit --file Cargo.lock
 
   desktop:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: windows-2022
+            platform: windows
+            arch: x64
+          - os: macos-15
+            platform: macos
+            arch: arm64
+          - os: macos-15-intel
+            platform: macos
+            arch: x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +61,9 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install Windows installer tools
+        if: runner.os == 'Windows'
+        run: choco install nsis --yes --no-progress
       - name: Install Linux desktop dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libdbus-1-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libegl1-mesa-dev libvulkan1
@@ -39,9 +72,7 @@ jobs:
       - run: cargo test --locked
       - name: Package macOS
         if: runner.os == 'macOS'
-        run: |
-          sh scripts/package-macos.sh release
-          ditto -c -k --sequesterRsrc --keepParent target/release/Skarva.app target/release/skarva-macos.zip
+        run: sh scripts/package-macos-release.sh
       - name: Package Linux
         if: runner.os == 'Linux'
         run: sh scripts/package-linux.sh
@@ -51,8 +82,45 @@ jobs:
         run: ./scripts/package-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: skarva-${{ runner.os }}-${{ runner.arch }}
+          name: skarva-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
-            target/release/skarva-*.zip
-            target/release/skarva-*.tar.gz
+            target/release/skarva-${{ needs.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.zip
+            target/release/skarva-${{ needs.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+            target/release/skarva-${{ needs.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.dmg
+            target/release/skarva-${{ needs.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.deb
+            target/release/skarva-${{ needs.version.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}-setup.exe
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, dependency-audit, desktop]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: skarva-*
+          merge-multiple: true
+          path: release-assets
+      - name: Validate all eight packages and write checksums
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: python3 scripts/release.py checksums release-assets --version "$VERSION"
+      - name: Publish the tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        shell: bash
+        run: |
+          flags=()
+          if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease --latest=false); fi
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --verify-tag --title "Skarva $VERSION" --generate-notes \
+            --notes-file packaging/release-notes.md "${flags[@]}"

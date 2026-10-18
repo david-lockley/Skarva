@@ -8,4 +8,6 @@
 *.pem
 /projects/
 /credentials/
+__pycache__/
+*.pyc
 
