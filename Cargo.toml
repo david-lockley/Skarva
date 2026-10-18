@@ -1,8 +1,14 @@
 [package]
-name = "jev-studio"
+name = "skarva"
 version = "0.1.0"
 edition = "2024"
-description = "A native visual canvas for agent workflows"
+description = "Skarva — an agentic whiteboard for connected work"
+
+[package.metadata.winresource]
+ProductName = "Skarva"
+FileDescription = "Skarva — An agentic whiteboard"
+InternalName = "skarva"
+OriginalFilename = "skarva.exe"
 
 [dependencies]
 eframe = { version = "0.32", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
@@ -14,6 +20,17 @@ egui_material_icons = "=0.4.0"
 keyring = { version = "=3.6.3", default-features = false, features = ["apple-native", "windows-native"] }
 ureq = { version = "=3.1.4", default-features = false, features = ["rustls", "json"] }
 zeroize = "1"
+base64 = "0.22"
+ring = "0.17"
+url = "2"
+webbrowser = "1.2"
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+quick-xml = "0.41"
+pdf-extract = "0.12.1"
+rfd = "0.17.2"
+
+[build-dependencies]
+winresource = "0.1.34"
 
 [profile.release]
 opt-level = 2

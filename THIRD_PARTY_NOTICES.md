@@ -1,6 +1,6 @@
 # Third-party notices
 
-JEV Studio uses **Material Symbols Rounded** for its interface icons. The icon font is
+Skarva uses **Material Symbols Rounded** for its interface icons. The icon font is
 Copyright Google LLC and is licensed under the Apache License, Version 2.0.
 The complete license is included at `licenses/Apache-2.0.txt`.
 

@@ -3,11 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleDisplayName</key><string>JEV Studio</string>
-    <key>CFBundleExecutable</key><string>jev-studio</string>
-    <key>CFBundleIdentifier</key><string>dev.jevstudio.app</string>
+    <key>CFBundleDisplayName</key><string>Skarva</string>
+    <key>CFBundleExecutable</key><string>skarva</string>
+    <key>CFBundleIdentifier</key><string>dev.skarva.app</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>JEV Studio</string>
+    <key>CFBundleName</key><string>Skarva</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>CFBundleVersion</key><string>1</string>

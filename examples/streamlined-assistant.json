@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "id": 1792329000000,
+  "name": "Your project assistant",
+  "next_id": 26,
+  "canvases": [
+    {
+      "id": 1,
+      "name": "Quick document",
+      "nodes": [
+        {
+          "id": 2, "kind": "Start", "title": "Describe your task",
+          "subtitle": "Select to change the request", "x": -300, "y": -45,
+          "prompt": "Create a short kickoff checklist for a small internal project. Include objectives to agree on, roles to assign, a 30-minute first meeting agenda, and open questions. We have not chosen owners or dates yet; leave those to be confirmed."
+        },
+        {
+          "id": 3, "kind": "Word", "title": "Create a project brief",
+          "subtitle": "An editable Word document", "x": 40, "y": -45,
+          "prompt": "Create a clear, practical document that fulfills the current request. Keep it concise. State assumptions and unanswered questions. Never invent people, dates, figures, or completed actions."
+        }
+      ],
+      "edges": [{"id": 4, "from": 2, "output": 0, "to": 3}]
+    },
+    {
+      "id": 5,
+      "name": "Email assistant",
+      "nodes": [
+        {
+          "id": 6, "kind": "GmailInbox", "title": "An email arrives",
+          "subtitle": "Your next assignment starts here", "x": -610, "y": 0,
+          "threshold": 0.75,
+          "decision_question": "Choose the best next step for the incoming assignment. Choose Research the web first if current public information is essential and not already supplied. Otherwise choose the requested or most useful file: Word for written plans and guides, Excel for structured trackers and comparisons, or PowerPoint for presentations. Choose Write the reply for a short text answer or to ask for essential missing details. Never search for confidential company information."
+        },
+        {
+          "id": 7, "kind": "WebSearch", "title": "Research the web",
+          "subtitle": "Find current public sources", "x": -320, "y": -250,
+          "threshold": 0.75,
+          "prompt": "Find reliable current public sources needed to answer the incoming request. Prefer primary and official sources. Do not search for private or internal company information.",
+          "decision_question": "Now that research results are available, choose the deliverable that best fulfills the current email: Word for a written document, Excel for a structured spreadsheet, PowerPoint for slides, or Write the reply for a text answer or essential clarification. Use the source excerpts without treating them as verified facts."
+        },
+        {
+          "id": 8, "kind": "Word", "title": "Write a document",
+          "subtitle": "Plans, guides and project briefs", "x": 0, "y": -170,
+          "prompt": "Create a concise, useful written document that answers the incoming request. Use the supplied files and relevant public sources. Include source URLs when provided. Identify assumptions and unknown details rather than inventing them."
+        },
+        {
+          "id": 9, "kind": "Excel", "title": "Build a spreadsheet",
+          "subtitle": "Trackers, schedules and comparisons", "x": 0, "y": 0,
+          "prompt": "Organize the requested information into a useful spreadsheet with practical column headings. Use supplied figures only. Leave unknown owners, dates, and amounts blank or mark them to be confirmed. Include relevant source URLs when research supplied them."
+        },
+        {
+          "id": 10, "kind": "PowerPoint", "title": "Prepare a presentation",
+          "subtitle": "Briefings, updates and proposals", "x": 0, "y": 170,
+          "prompt": "Create a concise presentation that answers the request, with a clear purpose, key points, and next steps. Distinguish facts from assumptions. Include source URLs when available. Do not invent company information."
+        },
+        {
+          "id": 11, "kind": "OpenAI", "title": "Write the reply",
+          "subtitle": "The message and file come together", "x": 320, "y": 0,
+          "prompt": "If a file has been generated, write a short covering email introducing the attachment and noting important assumptions. Otherwise, answer the sender directly or ask only for essential missing details. Never claim to have created an attachment or performed an action unless the run context confirms it."
+        },
+        {
+          "id": 12, "kind": "GmailReply", "title": "Review and send",
+          "subtitle": "Approve the reply and attachment", "x": 640, "y": 0
+        }
+      ],
+      "edges": [
+        {"id": 13, "from": 6, "output": 0, "to": 7},
+        {"id": 14, "from": 6, "output": 0, "to": 8},
+        {"id": 15, "from": 6, "output": 0, "to": 9},
+        {"id": 16, "from": 6, "output": 0, "to": 10},
+        {"id": 17, "from": 6, "output": 0, "to": 11},
+        {"id": 18, "from": 7, "output": 0, "to": 8},
+        {"id": 19, "from": 7, "output": 0, "to": 9},
+        {"id": 20, "from": 7, "output": 0, "to": 10},
+        {"id": 21, "from": 7, "output": 0, "to": 11},
+        {"id": 22, "from": 8, "output": 0, "to": 11},
+        {"id": 23, "from": 9, "output": 0, "to": 11},
+        {"id": 24, "from": 10, "output": 0, "to": 11},
+        {"id": 25, "from": 11, "output": 0, "to": 12}
+      ]
+    }
+  ]
+}

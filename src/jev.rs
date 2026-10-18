@@ -17,6 +17,7 @@ pub struct OptionDescription {
 pub struct RouteRequest {
     pub test_message: String,
     pub current_block: String,
+    pub question: String,
     pub path: Vec<String>,
     pub options: Vec<OptionDescription>,
 }
@@ -39,7 +40,7 @@ struct ApiRequest<'a> {
 struct ChoiceQuestion {
     #[serde(rename = "type")]
     kind: &'static str,
-    instructions: &'static str,
+    instructions: String,
     criteria: BTreeMap<String, String>,
 }
 
@@ -80,7 +81,10 @@ fn build_request(request: &RouteRequest) -> Result<ApiRequest<'static>, String> 
             "next_path",
             ChoiceQuestion {
                 kind: "choice",
-                instructions: "Given the test message and current block, which connected path best handles the request? Choose exactly one of the available paths.",
+                instructions: format!(
+                    "{} Choose exactly one of the available paths based on the message and option descriptions.",
+                    request.question.trim()
+                ),
                 criteria,
             },
         )]),
@@ -115,7 +119,7 @@ fn parse_answer(
 pub fn route(request: RouteRequest) -> Result<RouteAnswer, String> {
     let body = build_request(&request)?;
     let key = Zeroizing::new(
-        credentials::load()?.ok_or("No TypeSafe API key saved. Open Jev settings to add one")?,
+        credentials::load()?.ok_or("Add a TypeSafe API key in Integrations → Jev decisions")?,
     );
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(20)))
@@ -158,6 +162,7 @@ mod tests {
         RouteRequest {
             test_message: "Please prepare a budget spreadsheet".into(),
             current_block: "Teams".into(),
+            question: "Should this become an assistant assignment?".into(),
             path: vec!["Start".into(), "Teams".into()],
             options: vec![
                 OptionDescription {
@@ -177,6 +182,12 @@ mod tests {
         let value = serde_json::to_value(build_request(&request()).unwrap()).unwrap();
         assert_eq!(value["model"], "jev-latest");
         assert_eq!(value["questions"]["next_path"]["type"], "choice");
+        assert!(
+            value["questions"]["next_path"]["instructions"]
+                .as_str()
+                .unwrap()
+                .contains("Should this become an assistant assignment?")
+        );
         assert_eq!(
             value["questions"]["next_path"]["criteria"]["edge_1"],
             "Excel spreadsheet"
