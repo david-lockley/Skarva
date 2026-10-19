@@ -10,4 +10,4 @@ These builds are currently ad-hoc signed on macOS and unsigned on Windows; Gatek
 
 Bring your own API keys. Start with the Text workflow template and connect one AI provider. See [setup and current limits](https://github.com/david-lockley/skarva/blob/main/docs/SETUP.md).
 
-Free for noncommercial use under [PolyForm Noncommercial 1.0.0](https://github.com/david-lockley/skarva/blob/main/LICENSE). Commercial use requires separate permission. `SHA256SUMS` lists download checksums.
+Open source under [Apache-2.0](https://github.com/david-lockley/skarva/blob/main/LICENSE), including commercial use. Preserve the required license and attribution notices when redistributing. `SHA256SUMS` lists download checksums.

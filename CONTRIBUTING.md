@@ -6,4 +6,4 @@ See [development setup](docs/DEVELOPMENT.md) for platform dependencies and check
 
 The app aims for a quiet charcoal interface, clear labels, responsive canvas controls, and a short path to the first working workflow. Keep provider and developer details inside the places where users configure or troubleshoot them.
 
-By submitting a contribution, you agree to license it under the repository's [PolyForm Noncommercial 1.0.0 license](LICENSE). Only submit code and assets you have the right to contribute. Keep third-party license and attribution notices with any dependencies or assets you add.
+By submitting a contribution, you agree to license it under the repository's [Apache-2.0 license](LICENSE). Only submit code and assets you have the right to contribute. Keep third-party license and attribution notices with any dependencies or assets you add.

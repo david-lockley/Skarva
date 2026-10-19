@@ -1,0 +1,9 @@
+Skarva
+Copyright 2026 David Lockley
+
+A lightweight desktop canvas for building AI agents.
+https://github.com/david-lockley/skarva
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+Third-party components retain their own notices and licenses; see
+THIRD_PARTY_NOTICES.md and licenses/.

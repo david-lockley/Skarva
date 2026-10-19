@@ -5,7 +5,7 @@ edition = "2024"
 description = "Skarva — an agentic whiteboard for connected work"
 repository = "https://github.com/david-lockley/skarva"
 readme = "README.md"
-license = "PolyForm-Noncommercial-1.0.0"
+license = "Apache-2.0"
 
 [package.metadata.winresource]
 ProductName = "Skarva"

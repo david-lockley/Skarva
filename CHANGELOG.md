@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Switched Skarva to Apache-2.0, with project attribution in NOTICE and desktop packages.
+- Refreshed the README with use cases and future ideas.
+
 ## 0.1.0 — unreleased preview
 
 - Native canvas with connected blocks, pan/zoom, group selection, and duplication.

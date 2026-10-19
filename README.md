@@ -1,41 +1,44 @@
-<img src="assets/app-icon.png" alt="Skarva icon" width="80" height="80">
+<p align="center">
+  <img src="assets/app-icon.png" alt="Skarva icon" width="80" height="80">
+</p>
 
-# Skarva
+<h1 align="center">Skarva</h1>
 
-**Draw the workflow. Let Jev choose the path.**
+<p align="center"><strong>A lightweight desktop canvas for building AI agents.</strong></p>
 
-Skarva is a desktop canvas for building agents out of connected blocks. Give it a request, connect a few possible actions, and let [Jev](https://typesafe.ai/) decide which path fits. Watch the run move through your canvas, inspect the result, and step in when a decision needs your judgment.
+<p align="center">
+  <img src="https://img.shields.io/badge/language-Rust-dea584?style=flat-square" alt="Language: Rust">
+  <img src="https://img.shields.io/badge/integrations-Jev%20%7C%20AI%20models%20%7C%20Gmail%20%7C%20Tavily-386c7d?style=flat-square" alt="Integrations: Jev, AI models, Gmail, Tavily">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-555?style=flat-square" alt="License: Apache-2.0"></a>
+</p>
 
 ![Skarva canvas showing an email branching into research, documents, spreadsheets, and presentations](docs/images/canvas.png)
 
+Skarva is a Figma-like canvas for creating AI agents. Draw up a workflow and let [Jev](https://typesafe.ai/) decide which path to take. The app puts the requests together from the blocks you've connected, so you don't have to write the routing logic yourself. If Jev isn't confident enough, it stops and asks you.
+
+For example, the same starting block can lead to different kinds of work:
+
 ```mermaid
 flowchart LR
-    A[Incoming request] --> B{Jev chooses}
+    A[Incoming request] --> B{Jev chooses a path}
     B --> C[Research the web]
-    B --> D[Create a document]
-    B --> E[Write a reply]
-    C --> D
-    D --> E
-    E --> F[You review and send]
+    B --> D[Create a Word document]
+    B --> E[Build an Excel sheet]
 ```
 
-## What can you build?
+## Use cases
 
-- An inbox workflow that turns an email into research, a document, or a reply.
-- A writing workflow that starts with a prompt and produces an editable Word file, spreadsheet, or presentation.
-- A branching agent that uses a clear question to choose its next action, and pauses when confidence is low.
+- **An email support agent:** pick up an email through Gmail, figure out what it needs, and draft a reply. You check it before sending. One email per run for now.
+- **An office assistant:** offload some repetitive work. Ask for a plan, spreadsheet, or presentation and have it attached to a reply.
+- **A community event helper:** send it an idea for an event. Let it research options, make a planning sheet, or write a guide for the volunteers.
 
-You connect the blocks; their outputs travel with them. A generated document becomes an email attachment automatically. Research and reference files become context for the next AI step. No separate variable wires to manage.
-
-Built in Rust with a native GPU canvas. Projects stay on your computer. AI and research steps use the providers you connect.
-
-## Try your first workflow
+## How to use
 
 1. Launch Skarva, choose **New project**, and select **Text workflow**.
 2. Open **Integrations → AI model**. Choose OpenRouter, OpenAI, or Anthropic and save your API key and model ID.
 3. Select the **Play** block, enter a request, and press **Play** in the toolbar. Your answer appears in Activity.
 
-Then add a second path from a block and connect **Jev decisions** to try routing. Every block can branch; you can also use an explicit **Choice** or **Yes / No** block.
+To try the Jev part, set up **Jev decisions** in Integrations and connect a block to a few possible next steps. You can also add a **Choice** or **Yes / No** block if you want a specific question in the workflow.
 
 Prefer to explore first? Create a blank canvas and connect **Play → End**. That needs no account or API key.
 
@@ -49,41 +52,58 @@ cd skarva
 cargo run --release
 ```
 
-On Linux, install the [desktop build dependencies](docs/DEVELOPMENT.md#linux) first. macOS and Windows need their usual Rust compiler tools. Packaging scripts and CI builds are included for all three platforms.
+If you're on Linux, you'll need a few [extra packages](docs/DEVELOPMENT.md#linux) first. On macOS and Windows, the usual Rust setup should be enough.
 
-Version-tagged releases build macOS ZIP/DMG packages (Apple Silicon and Intel), Windows x64 ZIP/installers, and Linux x64 tar.gz/DEB packages automatically. [Release and versioning guide →](docs/RELEASING.md)
+There's also an automated release workflow for macOS, Windows, and Linux. The packaging details are in the [release guide](docs/RELEASING.md).
 
-**Current stage: early preview.** The app runs locally on macOS; Windows and Linux have build and packaging support, with automated checks configured. Check the [release checklist](docs/RELEASE_CHECKLIST.md) for what has actually been verified before distributing a build.
+I've been testing on macOS. Windows and Linux builds are set up too, but I could use help trying them on real machines. It's still an early project; the [checklist](docs/RELEASE_CHECKLIST.md) has the longer version of what's been tested.
 
-## Connect only what you need
+## Future features
 
-| Service | Used for |
-| --- | --- |
+Some things I'd like to add, from smaller additions to the more ambitious stuff:
+
+### Smaller steps
+
+- **More integrations:** Microsoft 365, GitHub, and a look at what's possible with iOS and Meta.
+- **More blocks:** programming, database searches, and maybe some 3D workflows further down the line.
+
+### Bigger projects
+
+- **Generate a workflow:** describe an agent and use a model through OpenRouter to draw up a starting canvas.
+- **Run in the background:** start with the computer and wait for work. I'd like to look into Gmail push notifications rather than checking the inbox every 15 seconds. That needs a bit more setup on Google's side.
+- **Headless deployment:** build an agent on the canvas, then export it to a separate program running on a local server.
+
+### Experimental
+
+- **Generate new blocks at runtime:** if a block is missing, let a model create it. A fun idea, but I'd need to work out how to run that code safely first.
+
+## A lot of APIs
+
+| Service                          | Used for                                           |
+| -------------------------------- | -------------------------------------------------- |
 | OpenRouter, OpenAI, or Anthropic | Writing, research queries, and Office file content |
-| TypeSafe / Jev | Choosing among connected paths |
-| Tavily | Web search |
-| Gmail | Receiving email and sending a reply you approve |
+| TypeSafe / Jev                   | Choosing among connected paths                     |
+| Tavily                           | Web search                                         |
+| Gmail                            | Receiving email and sending a reply you approve    |
 
-Bring your own keys. Provider charges and limits apply separately; a ChatGPT subscription does not include an API balance. Gmail currently requires your own Google Desktop OAuth client. [Connection setup →](docs/SETUP.md)
+You'll need your own API keys for the services you want to use. Gmail takes a little more setup because you need a Google OAuth client. I've put the steps in the [setup guide](docs/SETUP.md).
 
-## A canvas that stays out of your way
+Projects are saved on your computer and API keys are stored encrypted. The blocks send what they need to the services you've connected, so keep that in mind before feeding it private files or work emails. It asks before sending an email.
+
+## Controls
 
 Drag blocks to move them. Drag a connection into empty space to add the next block. Box-select a group to move it together. Two fingers pan; pinch zooms. With a mouse, hold Space to pan. Ctrl/Command-D duplicates your selection; Delete removes selected blocks or connections.
 
-Projects save automatically. Import and export JSON workflows to share the structure without sharing service keys or conversation history. Review instructions and local file paths before running a workflow from someone else.
+## How it was built
 
-## Before you use real data
+The code was generated with OpenAI Codex, then worked on through a lot of testing and changes. Please keep that in mind before trusting it with anything important.
 
-Email, files, and workflow context are sent to the providers used by your blocks. Service keys are encrypted locally with a master key in the OS credential store. Outgoing email always waits for **Approve & send**.
-
-Skarva currently processes one email per run and carries one generated Office attachment. Office output supports basic text, tables, and slides. Teams, Outlook, and Copilot integrations are not available. [Setup, storage, and limitations →](docs/SETUP.md)
+I wanted to keep it lightweight and easy to run, so it's built in Rust with egui/eframe. No web frontend.
 
 ## Contribute
 
-Bug reports, design feedback, and small focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started and [SECURITY.md](SECURITY.md) for reporting security issues.
+If you try it, I'd love to hear what you made or what got in the way. Bug reports, design suggestions, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to help. For security issues, please use [SECURITY.md](SECURITY.md).
 
 ## License
 
-Skarva is **source available and free for noncommercial use** under [PolyForm Noncommercial 1.0.0](LICENSE), including the personal and institutional uses described in that license. **Commercial use requires separate permission from the author.** Open an issue to discuss commercial licensing without posting private business information.
-
-Dependencies keep their own licenses. See [third-party notices](THIRD_PARTY_NOTICES.md).
+[Apache-2.0](LICENSE). You're welcome to use it and build on it, including commercially. Just keep the license and required credits when sharing your version. Project credit is in [NOTICE](NOTICE); dependency and icon credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

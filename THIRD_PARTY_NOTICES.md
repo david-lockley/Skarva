@@ -2,7 +2,7 @@
 
 Rust dependency license texts and package versions for the supported desktop
 targets are collected in [licenses/THIRD_PARTY.txt](licenses/THIRD_PARTY.txt).
-They retain their own licenses, independently of Skarva's noncommercial license.
+They retain their own licenses, independently of Skarva's Apache-2.0 license.
 Unmodified source packages are available from the crates.io registry at their
 listed versions, including the MPL-2.0 `option-ext` source.
 

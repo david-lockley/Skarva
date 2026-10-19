@@ -1,6 +1,6 @@
 # Preview release checklist
 
-Release target: **0.1.0 preview**, source available under PolyForm Noncommercial 1.0.0. This is a preview, not a claim of production readiness or an independent security audit.
+Release target: **0.1.0 preview**, open source under Apache-2.0. This is a preview, not a claim of production readiness or an independent security audit.
 
 ## Completed locally
 
